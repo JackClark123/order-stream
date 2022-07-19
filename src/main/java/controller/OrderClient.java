@@ -1,10 +1,12 @@
 package controller;
 
-import beanstalk.bigtable.CreateIfNotExists;
-import beanstalk.data.types.*;
-import beanstalk.values.GatewayHeader;
-import beanstalk.values.Project;
-import beanstalk.values.Table;
+
+import com.beanstalk.core.beam.OrderBook;
+import com.beanstalk.core.bigtable.repositories.CreateIfNotExists;
+import com.beanstalk.core.spanner.entities.order.Order;
+import com.beanstalk.core.values.GatewayHeader;
+import com.beanstalk.core.values.Project;
+import com.beanstalk.core.values.Table;
 import io.micronaut.context.event.ShutdownEvent;
 import io.micronaut.context.event.StartupEvent;
 import io.micronaut.http.annotation.Header;
@@ -32,13 +34,9 @@ public class OrderClient {
     @EventListener
     public void onStartupEvent(StartupEvent event) {
 
-        CreateIfNotExists.tables(Project.PROJECT, Table.INSTANCE, Table.LIVE_ORDER, MessageOrder.class);
-
         CreateIfNotExists.tables(Project.PROJECT, Table.INSTANCE, Table.ORDER_BOOK, OrderBook.class);
 
         CreateIfNotExists.tables(Project.PROJECT, Table.INSTANCE, Table.ORDER_WAREHOUSE, Order.class);
-
-        CreateIfNotExists.tables(Project.PROJECT, Table.INSTANCE, Table.ACCOUNT, Account.class);
 
         pubSubSubscription.start();
     }
@@ -52,7 +50,6 @@ public class OrderClient {
     @OnOpen
     public void onOpen(WebSocketSession session, @Header(GatewayHeader.account) String accountID) {
         System.out.println(accountID);
-        broadcaster.broadcastAsync("hello");
     }
 
     @OnMessage

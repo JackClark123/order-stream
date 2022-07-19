@@ -1,11 +1,13 @@
 package service;
 
-import beanstalk.bigtable.Beanstalk;
-import beanstalk.data.BeanstalkData;
-import beanstalk.data.types.Account;
-import beanstalk.data.types.MessageOrder;
-import beanstalk.values.Project;
-import beanstalk.values.Table;
+
+import com.beanstalk.core.beam.BeamOrder;
+import com.beanstalk.core.spanner.entities.account.PrivateAccount;
+import com.beanstalk.core.spanner.entities.account.PublicAccount;
+import com.beanstalk.core.spanner.entities.order.Order;
+import com.beanstalk.core.spanner.repositories.PrivateAccountRepository;
+import com.beanstalk.core.values.Project;
+import com.beanstalk.core.values.Table;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.joda.JodaModule;
@@ -22,15 +24,21 @@ import com.google.cloud.pubsub.v1.MessageReceiver;
 import com.google.cloud.pubsub.v1.Subscriber;
 import com.google.cloud.pubsub.v1.SubscriptionAdminClient;
 import com.google.pubsub.v1.*;
+import entities.Balance;
 import io.micronaut.http.HttpResponse;
 import io.micronaut.websocket.WebSocketBroadcaster;
 import io.micronaut.websocket.WebSocketSession;
+import jakarta.inject.Inject;
 
 import java.io.IOException;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Predicate;
 
 public class PubSubSubscription implements MessageReceiver {
+
+    @Inject
+    PrivateAccountRepository privateAccountRepository;
 
     private final WebSocketBroadcaster broadcaster;
 
@@ -97,20 +105,30 @@ public class PubSubSubscription implements MessageReceiver {
 
         System.out.println(msg);
 
-        MessageOrder messageOrder = null;
+        BeamOrder order = null;
 
         try {
-            messageOrder = objectMapper.readValue(msg, MessageOrder.class);
+            order = objectMapper.readValue(msg, BeamOrder.class);
         } catch (JsonProcessingException e) {
             e.printStackTrace();
         }
 
-        if (messageOrder != null && messageOrder.getOrder().getIdentifier() != null) {
-            broadcaster.broadcastAsync(msg, isValid(messageOrder.getOrder().getAccountID()));
+        if (order != null && order.getIdentifier() != null) {
+            broadcaster.broadcastAsync(msg, isValid(order.getAccountID().toString()));
 
-            Account account = Beanstalk.account(dataClient, messageOrder.getOrder().getAccountID());
+            Optional<PrivateAccount> privateAccount = privateAccountRepository.findById(PublicAccount.builder()
+                    .id(order.getAccountID())
+                    .build());
 
-            broadcaster.broadcastAsync(account, isValid(messageOrder.getOrder().getAccountID()));
+            if (privateAccount.isPresent()) {
+
+                Balance balance = Balance.builder()
+                        .accountId(order.getAccountID())
+                        .balance(privateAccount.get().getBalance())
+                        .build();
+
+                broadcaster.broadcastAsync(balance, isValid(order.getAccountID().toString()));
+            }
 
         }
     }
